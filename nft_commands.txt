@@ -1,0 +1,113 @@
+blockfrost project id: W3FMZVGM9OtROLQg7cUCnqJuICSNgDjX
+
+curl "https://ipfs.blockfrost.io/api/v0/ipfs/add" \
+  -X POST \
+  -H "project_id: W3FMZVGM9OtROLQg7cUCnqJuICSNgDjX" \
+  -F "file=@./scully.001_rounded.png"
+
+art-hash: QmeYNnUzua3bhYDiYfaeBPVJXPjiZSAiiDFjyuqidNXUqM
+
+curl "https://ipfs.blockfrost.io/api/v0/ipfs/pin/add/QmeYNnUzua3bhYDiYfaeBPVJXPjiZSAiiDFjyuqidNXUqM" \
+  -X POST \
+  -H "project_id: W3FMZVGM9OtROLQg7cUCnqJuICSNgDjX"
+
+
+mkdir policy && cd policy
+cardano-cli address key-gen \
+    --verification-key-file policy.vkey \
+    --signing-key-file policy.skey
+
+cardano-cli address key-hash --payment-verification-key-file policy.vkey
+
+bf508e748ef554e2ed352b766c5249d54324ad415f5d62c43ba4b6c7
+
+nano policy.script
+{
+  "type": "all",
+  "scripts": [
+    {
+      "keyHash": "bf508e748ef554e2ed352b766c5249d54324ad415f5d62c43ba4b6c7",
+      "type": "sig"
+    },
+    {
+      "type": "before",
+      "slot": 29541804
+    }
+  ]
+}
+
+cardano-cli query tip --mainnet
+
+tip: 29531804
+before: 29541804
+
+cardano-cli transaction policyid --script-file policy.script > policy.id
+
+policy_id: 553d5c9d752ce49c2661c623e2ab4719ce795eb6b0c93a636586037d
+
+nano nft_meta.json
+
+{
+  "721": {    	"553d5c9d752ce49c2661c623e2ab4719ce795eb6b0c93a636586037d": {
+      "scully001": {
+        "name": "Scully #001",
+      "image": "ipfs://QmeYNnUzua3bhYDiYfaeBPVJXPjiZSAiiDFjyuqidNXUqM"
+      }
+    }
+  }
+}
+
+cardano-cli  query protocol-parameters \
+--mainnet \
+--out-file protocol.json
+
+cardano-cli query utxo --address $(cat $CNODE_HOME/priv/wallet/nft/base.addr) --mainnet
+
+balance: 2617870
+tx-in: 3edeca6d1cd343d94667ccbfc69c0946bff59327b3868ddef0f4e42334b5765f#0
+
+cardano-cli transaction build-raw \
+  --fee 0 \
+  --tx-in 3edeca6d1cd343d94667ccbfc69c0946bff59327b3868ddef0f4e42334b5765f#0 \
+  --tx-out $(cat $CNODE_HOME/priv/wallet/nft/base.addr)+2617870+"1 $(cat policy.id).scully001" \
+  --mint="1 $(cat policy.id).scully001" \
+  --minting-script-file policy.script \
+  --metadata-json-file nft_meta.json \
+  --invalid-hereafter=29541804 \
+  --out-file matx.raw
+
+cardano-cli transaction calculate-min-fee \
+  --tx-body-file matx.raw \
+  --tx-in-count 1 \
+  --tx-out-count 1 \
+  --witness-count 2 \
+  --mainnet \
+  --protocol-params-file protocol.json
+
+min fee: 191417
+change: 2617870 - 191417 = 2426453
+
+cardano-cli transaction build-raw \
+  --fee 191417 \
+  --tx-in 3edeca6d1cd343d94667ccbfc69c0946bff59327b3868ddef0f4e42334b5765f#0 \
+  --tx-out $(cat $CNODE_HOME/priv/wallet/nft/base.addr)+2426453+"1 $(cat policy.id).scully001" \
+  --mint="1 $(cat policy.id).scully001" \
+  --minting-script-file policy.script \
+  --metadata-json-file nft_meta.json \
+  --invalid-hereafter=29541804 \
+  --out-file matx.raw
+
+cardano-cli transaction sign \
+  --signing-key-file $CNODE_HOME/priv/wallet/nft/payment.skey \
+  --signing-key-file policy.skey \
+  --mainnet \
+  --tx-body-file matx.raw \
+  --out-file matx.signed
+
+cardano-cli transaction submit --tx-file  matx.signed --mainnet
+
+
+curl "https://ipfs.blockfrost.io/api/v0/ipfs/pin/list/" \
+  -H "project_id: W3FMZVGM9OtROLQg7cUCnqJuICSNgDjX"
+
+https://pool.pm/553d5c9d752ce49c2661c623e2ab4719ce795eb6b0c93a636586037d.scully001
